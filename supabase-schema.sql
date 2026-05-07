@@ -69,3 +69,12 @@ ON public.transazioni FOR ALL USING (user_id = requesting_user_id());
 -- Cause
 CREATE POLICY "Utenti possono gestire le proprie cause" 
 ON public.cause FOR ALL USING (user_id = requesting_user_id());
+
+-- 4. Tabella AI Knowledge Base (Aggiornamenti settimanali/mensili)
+CREATE TABLE IF NOT EXISTS public.ai_knowledge_base (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source TEXT NOT NULL,
+  content TEXT NOT NULL,
+  summary TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);

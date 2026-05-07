@@ -1,6 +1,6 @@
 "use client";
 
-import { useUser, SignIn } from "@clerk/nextjs";
+import { useUser, SignIn, SignInButton } from "@clerk/nextjs";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -112,11 +112,17 @@ export default function Home() {
           <span className="text-xl font-bold tracking-tight text-white hidden sm:block">StateraLex</span>
         </div>
         <div className="flex items-center gap-4">
-          {/* Mobile view only standard sign_in link, using NextJS native or Clerk native routing */}
-          <a href="#login-section" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">Accedi</a>
-          <a href="#login-section" className="bg-[#007AFF] hover:bg-[#005bb5] text-white px-5 py-2 rounded-full text-sm font-semibold transition-all shadow-lg shadow-[#007AFF]/20 flex items-center gap-2">
-            Inizia Ora <ArrowRight className="w-4 h-4" />
-          </a>
+          {/* Pulsanti Clerk Modal */}
+          <SignInButton mode="modal" fallbackRedirectUrl="/dashboard">
+            <button className="text-sm font-medium text-slate-300 hover:text-white transition-colors cursor-pointer">
+              Accedi
+            </button>
+          </SignInButton>
+          <SignInButton mode="modal" fallbackRedirectUrl="/dashboard">
+            <button className="bg-[#007AFF] hover:bg-[#005bb5] text-white px-5 py-2 rounded-full text-sm font-semibold transition-all shadow-lg shadow-[#007AFF]/20 flex items-center gap-2 cursor-pointer">
+              Inizia Ora <ArrowRight className="w-4 h-4" />
+            </button>
+          </SignInButton>
         </div>
       </nav>
 
@@ -166,9 +172,11 @@ export default function Home() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4"
           >
-            <a href="#login-section" className="w-full sm:w-auto bg-white text-black px-8 py-4 rounded-xl font-bold text-lg hover:bg-slate-200 transition-colors shadow-xl flex items-center justify-center gap-2">
-              Prova Gratis <ArrowRight className="w-5 h-5" />
-            </a>
+            <SignInButton mode="modal" fallbackRedirectUrl="/dashboard">
+              <button className="w-full sm:w-auto bg-white text-black px-8 py-4 rounded-xl font-bold text-lg hover:bg-slate-200 transition-colors shadow-xl flex items-center justify-center gap-2">
+                Prova Gratis <ArrowRight className="w-5 h-5" />
+              </button>
+            </SignInButton>
             <a href="#features-section" className="w-full sm:w-auto bg-white/5 border border-white/10 hover:bg-white/10 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-colors flex items-center justify-center gap-2">
               Scopri le funzioni
             </a>

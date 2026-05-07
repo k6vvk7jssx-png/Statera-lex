@@ -10,6 +10,7 @@ import ExportCommercialistaButton from "@/components/ExportCommercialistaButton"
 import { useExpenseContext } from "@/context/ExpenseContext";
 import { getProfiloAction } from "@/app/impostazioni/actions";
 import AiAdvisor from "@/components/AiAdvisor";
+import AnnualDashboardModal from "@/components/AnnualDashboardModal";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -110,6 +111,7 @@ export default function Dashboard() {
 
   const [sogliaFaccina, setSogliaFaccina] = useState(40);
   const [showGuida, setShowGuida] = useState(false);
+  const [showAnnualModal, setShowAnnualModal] = useState(false);
 
   // Rimosso useEffect anticipato
 
@@ -534,7 +536,10 @@ export default function Dashboard() {
         </div>
 
         {/* Card 2: Riepilogo Annuale MTD visualizzata solo su desktop per bilanciare */}
-        <div className="ios-card hidden md:flex flex-col justify-between">
+        <div 
+          className="ios-card hidden md:flex flex-col justify-between hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+          onClick={() => setShowAnnualModal(true)}
+        >
           <div>
             <h3 className="mb-4">Riepilogo YTD (Anno)</h3>
             <div className="chart-container-small mx-auto mb-4">
@@ -543,7 +548,7 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-3 border-t border-black/10 dark:border-white/10 pt-4 mt-auto">
-            <p className="text-sm opacity-70 text-center">I grafici annuali offrono una visione globale YTD rispetto al regime fiscale impostato.</p>
+            <p className="text-sm opacity-70 text-center text-blue-500 font-medium">Clicca per l'analisi mese per mese</p>
           </div>
         </div>
 
@@ -788,6 +793,14 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modale Dashboard Annuale (Mese per Mese) */}
+      {showAnnualModal && (
+        <AnnualDashboardModal 
+          onClose={() => setShowAnnualModal(false)} 
+          regime={regimeCorrente || "forfettario"} 
+        />
       )}
 
       {/* Bottone Export Excel Commercialista */}
