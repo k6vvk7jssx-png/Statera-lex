@@ -482,9 +482,15 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Torta Annuale (Piccola in alto a dx - La manteniamo fissa come design target per ora) */}
-        <div className="md:hidden" style={{ width: "80px", height: "80px" }}>
+        {/* Torta Annuale (Piccola in alto a dx) */}
+        <div 
+          className="md:hidden cursor-pointer transition-transform hover:scale-105" 
+          style={{ width: "80px", height: "80px" }}
+          onClick={() => setShowAnnualModal(true)}
+          title="Vedi Analisi Annuale"
+        >
           <Pie data={dataAnnuale} options={{ plugins: { legend: { display: false } } }} />
+          <p className="text-[10px] text-center text-blue-500 mt-1 font-medium">Vedi Anno</p>
         </div>
       </div>
 
@@ -552,7 +558,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="hidden lg:block">
+        <div className="col-span-1 md:col-span-2 lg:col-span-1">
           <AiAdvisor financialData={{
             entrate: entrateMensili,
             uscite: usciteMensili,
