@@ -34,7 +34,7 @@ export default function AiAdvisor({ financialData }: AiAdvisorProps) {
   // Avvio automatico al caricamento
   useEffect(() => {
     if (messages.length === 0) {
-      sendMessage(null, "Ciao! Sono il tuo Aiuto Commercialista virtuale. Posso analizzare il tuo bilancio mensile, aiutarti a calcolare le tasse o chiarire qualsiasi dubbio fiscale. Chiedimi tutto quello che ti serve!");
+      sendMessage(null, "Fai un'analisi super rapida della mia situazione di questo mese in 2-3 righe. Salutami come il mio 'AI Fiscal Advisor' e dammi un consiglio utile sui miei dati attuali.");
     }
   }, []); // Eseguito solo una volta
 
