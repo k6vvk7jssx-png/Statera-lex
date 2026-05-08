@@ -173,6 +173,7 @@ export default function ExportCommercialistaButton() {
             const CASSA_ALIQUOTA_BASE = 0.17;
             const CASSA_ALIQUOTA_ECCEDENZA = 0.03;
             const CASSA_TETTO = 135000;
+            const CASSA_MATERNITA_ANNUALE = 100;
 
             let cassaTeorica = 0;
             if (imponibileFiscale <= CASSA_TETTO) {
@@ -180,6 +181,7 @@ export default function ExportCommercialistaButton() {
             } else {
                 cassaTeorica = (CASSA_TETTO * CASSA_ALIQUOTA_BASE) + ((imponibileFiscale - CASSA_TETTO) * CASSA_ALIQUOTA_ECCEDENZA);
             }
+            cassaTeorica += CASSA_MATERNITA_ANNUALE;
 
             const riepilogoData = [
                 { "Voce": "Totale Incassato (Compenso + Spese Generali)", "Valore": `€ ${totaleIncassato.toFixed(2)}` },

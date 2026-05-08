@@ -125,9 +125,11 @@ export default function AnnualDashboardModal({ onClose, regime }: AnnualDashboar
           const baseIrpef = Math.max(0, imponibileFiscale - cassaForense);
           const irpefLorda = baseIrpef * 0.23; // scaglione base test
           const ordTotIva = lordoIncassato * 0.22;
+          const ritenutaPresunta = lordoIncassato * 0.20;
+          const irpefDaVersare = Math.max(0, irpefLorda - ritenutaPresunta);
           
-          totTasseAccantonate = (lordoIncassato * 0.04) + cassaForense + ordTotIva + irpefLorda;
-          const bonificoIncassato = totEntrate - (lordoIncassato * 0.20); // meno ritenuta presunta
+          totTasseAccantonate = (lordoIncassato * 0.04) + cassaForense + ordTotIva + irpefDaVersare;
+          const bonificoIncassato = totEntrate - ritenutaPresunta; // meno ritenuta presunta
           nettoPulito = bonificoIncassato - totTasseAccantonate - totUsciteLorde;
         }
 
