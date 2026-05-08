@@ -29,6 +29,7 @@ export default function Home() {
     const CASSA_ALIQUOTA_BASE = 0.17;
     const CASSA_ALIQUOTA_ECCEDENZA = 0.03;
     const CASSA_TETTO = 135000;
+    const CASSA_MATERNITA_ANNUALE = 100; // Quota fissa maternità
 
     if (simRegime.startsWith("forfettario")) {
       const compensoBase = importoLordo;
@@ -41,6 +42,7 @@ export default function Home() {
       } else {
         cassaSoggettiva = (CASSA_TETTO * CASSA_ALIQUOTA_BASE) + ((redditoImponibileLordo - CASSA_TETTO) * CASSA_ALIQUOTA_ECCEDENZA);
       }
+      cassaSoggettiva += CASSA_MATERNITA_ANNUALE; // Aggiunta maternità
       const cpa = (compensoBase + speseGenerali) * 0.04;
       const cassaTotale = cassaSoggettiva + cpa;
 
@@ -64,6 +66,7 @@ export default function Home() {
       } else {
           cassaSoggettiva = (CASSA_TETTO * CASSA_ALIQUOTA_BASE) + ((imponibileCassa - CASSA_TETTO) * CASSA_ALIQUOTA_ECCEDENZA);
       }
+      cassaSoggettiva += CASSA_MATERNITA_ANNUALE; // Aggiunta maternità
       const cpa = imponibileLordo * 0.04;
       const cassaTotale = cassaSoggettiva + cpa;
 

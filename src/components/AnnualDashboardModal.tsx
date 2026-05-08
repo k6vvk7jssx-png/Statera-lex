@@ -110,7 +110,8 @@ export default function AnnualDashboardModal({ onClose, regime }: AnnualDashboar
 
         if (regime === "forfettario") {
           const imponibileFiscale = lordoIncassato * 0.78;
-          const cassaForense = imponibileFiscale * 0.17; 
+          let cassaForense = imponibileFiscale * 0.17; 
+          cassaForense += 100 / 12; // Maternità mensilizzata
           const baseImposta = Math.max(0, imponibileFiscale - cassaForense);
           const impostaSostitutiva = baseImposta * 0.15; 
           
@@ -119,7 +120,8 @@ export default function AnnualDashboardModal({ onClose, regime }: AnnualDashboar
         } else {
           // Ordinario semplificato
           const imponibileFiscale = Math.max(0, lordoIncassato - totaleSpeseDeducibili);
-          const cassaForense = imponibileFiscale * 0.17;
+          let cassaForense = imponibileFiscale * 0.17;
+          cassaForense += 100 / 12; // Maternità mensilizzata
           const baseIrpef = Math.max(0, imponibileFiscale - cassaForense);
           const irpefLorda = baseIrpef * 0.23; // scaglione base test
           const ordTotIva = lordoIncassato * 0.22;

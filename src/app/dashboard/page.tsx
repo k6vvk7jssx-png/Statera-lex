@@ -248,6 +248,7 @@ export default function Dashboard() {
       const CASSA_ALIQUOTA_BASE = 0.17;
       const CASSA_ALIQUOTA_ECCEDENZA = 0.03;
       const CASSA_TETTO = 135000;
+      const CASSA_MATERNITA_MENSILE = 100 / 12; // Quota fissa mensilizzata
 
       if (lordoIncassato > 0) {
         if (!isRegimeOrdinario) {
@@ -261,6 +262,7 @@ export default function Dashboard() {
           } else {
             cassaForense = (CASSA_TETTO * CASSA_ALIQUOTA_BASE) + ((imponibileFiscale - CASSA_TETTO) * CASSA_ALIQUOTA_ECCEDENZA);
           }
+          cassaForense += CASSA_MATERNITA_MENSILE; // Aggiunta maternità
           totCassaMaturata = cassaForense;
 
           const baseImposta = Math.max(0, imponibileFiscale - cassaForense);
@@ -282,6 +284,7 @@ export default function Dashboard() {
           } else {
             cassaForense = (CASSA_TETTO * CASSA_ALIQUOTA_BASE) + ((imponibileFiscale - CASSA_TETTO) * CASSA_ALIQUOTA_ECCEDENZA);
           }
+          cassaForense += CASSA_MATERNITA_MENSILE; // Aggiunta maternità
           totCassaMaturata = cassaForense;
           
           // L'IRPEF si applica sull'imponibile al netto della cassa forense
