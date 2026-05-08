@@ -221,7 +221,23 @@ export default function Tasse() {
                         const cassaForenseItem = cassaSoggettivaItem + cpa;
 
                         const imponibileIrpefItem = imponibileLordoItem - cassaSoggettivaItem;
-                        const irpefLordaItem = imponibileIrpefItem * (currentScaglione / 100.0);
+                        
+                        let irpefLordaItem = 0.0;
+                        if (imponibileIrpefItem > 0) {
+                            const primo_scaglione = Math.min(imponibileIrpefItem, 28000);
+                            irpefLordaItem += primo_scaglione * 0.23;
+                            
+                            if (imponibileIrpefItem > 28000) {
+                                const secondo_scaglione = Math.min(imponibileIrpefItem - 28000, 22000);
+                                irpefLordaItem += secondo_scaglione * 0.33;
+                            }
+                            
+                            if (imponibileIrpefItem > 50000) {
+                                const terzo_scaglione = imponibileIrpefItem - 50000;
+                                irpefLordaItem += terzo_scaglione * 0.43;
+                            }
+                        }
+                        
                         const addizionaliItem = imponibileIrpefItem * 0.03;
 
                         const tasseItem = Math.max(0, irpefLordaItem - ritenutaItem) + addizionaliItem + iva;
@@ -260,7 +276,21 @@ export default function Tasse() {
                 // ImponibileIrpef = (Compenso + SpeseGenerali) - CassaSoggettivo - SpeseDeducibili
                 const imponibileIrpef = Math.max(0, imponibileOrdinarioAnnuo - cassaSoggettivo - speseDeducibiliTotali);
 
-                const irpefLorda = imponibileIrpef * (currentScaglione / 100.0);
+                let irpefLorda = 0.0;
+                if (imponibileIrpef > 0) {
+                    const primo_scaglione = Math.min(imponibileIrpef, 28000);
+                    irpefLorda += primo_scaglione * 0.23;
+                    
+                    if (imponibileIrpef > 28000) {
+                        const secondo_scaglione = Math.min(imponibileIrpef - 28000, 22000);
+                        irpefLorda += secondo_scaglione * 0.33;
+                    }
+                    
+                    if (imponibileIrpef > 50000) {
+                        const terzo_scaglione = imponibileIrpef - 50000;
+                        irpefLorda += terzo_scaglione * 0.43;
+                    }
+                }
 
                 // IrpefDaVersare = max(0, IrpefLorda - Ritenuta)
                 const irpefDaVersare = Math.max(0, irpefLorda - totRitenutaOrdinario);
@@ -355,7 +385,23 @@ export default function Tasse() {
             const ritenutaScontata = imponibileLordo * 0.20;
 
             const imponibileIrpef = Math.max(0, imponibileCassa - cassaSoggettiva);
-            const irpefLorda = imponibileIrpef * (scaglioneManuale / 100.0); // Simulazione su scaglione scelto
+            
+            let irpefLorda = 0.0;
+            if (imponibileIrpef > 0) {
+                const primo_scaglione = Math.min(imponibileIrpef, 28000);
+                irpefLorda += primo_scaglione * 0.23;
+                
+                if (imponibileIrpef > 28000) {
+                    const secondo_scaglione = Math.min(imponibileIrpef - 28000, 22000);
+                    irpefLorda += secondo_scaglione * 0.33;
+                }
+                
+                if (imponibileIrpef > 50000) {
+                    const terzo_scaglione = imponibileIrpef - 50000;
+                    irpefLorda += terzo_scaglione * 0.43;
+                }
+            }
+            
             const irpefaSaldo = Math.max(0, irpefLorda - ritenutaScontata);
 
             const addizionali = imponibileIrpef * 0.03;

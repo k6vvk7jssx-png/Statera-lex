@@ -123,7 +123,22 @@ export default function AnnualDashboardModal({ onClose, regime }: AnnualDashboar
           let cassaForense = imponibileFiscale * 0.17;
           cassaForense += 100 / 12; // Maternità mensilizzata
           const baseIrpef = Math.max(0, imponibileFiscale - cassaForense);
-          const irpefLorda = baseIrpef * 0.23; // scaglione base test
+          
+          let irpefLorda = 0.0;
+          if (baseIrpef > 0) {
+            const primo_scaglione = Math.min(baseIrpef, 28000);
+            irpefLorda += primo_scaglione * 0.23;
+            
+            if (baseIrpef > 28000) {
+              const secondo_scaglione = Math.min(baseIrpef - 28000, 22000);
+              irpefLorda += secondo_scaglione * 0.33;
+            }
+            
+            if (baseIrpef > 50000) {
+              const terzo_scaglione = baseIrpef - 50000;
+              irpefLorda += terzo_scaglione * 0.43;
+            }
+          }
           const ordTotIva = lordoIncassato * 0.22;
           const ritenutaPresunta = lordoIncassato * 0.20;
           const irpefDaVersare = Math.max(0, irpefLorda - ritenutaPresunta);

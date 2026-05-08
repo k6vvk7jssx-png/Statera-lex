@@ -74,7 +74,23 @@ export default function Home() {
       const ritenutaScontata = imponibileLordo * 0.20;
 
       const imponibileIrpef = Math.max(0, imponibileCassa - cassaSoggettiva);
-      const irpefLorda = imponibileIrpef * (simScaglione / 100.0);
+      
+      let irpefLorda = 0.0;
+      if (imponibileIrpef > 0) {
+        const primo_scaglione = Math.min(imponibileIrpef, 28000);
+        irpefLorda += primo_scaglione * 0.23;
+        
+        if (imponibileIrpef > 28000) {
+          const secondo_scaglione = Math.min(imponibileIrpef - 28000, 22000);
+          irpefLorda += secondo_scaglione * 0.33;
+        }
+        
+        if (imponibileIrpef > 50000) {
+          const terzo_scaglione = imponibileIrpef - 50000;
+          irpefLorda += terzo_scaglione * 0.43;
+        }
+      }
+
       const irpefaSaldo = Math.max(0, irpefLorda - ritenutaScontata);
 
       const addizionali = imponibileIrpef * 0.03;
