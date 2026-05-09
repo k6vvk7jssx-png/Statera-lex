@@ -31,9 +31,9 @@ export default function BottomNav() {
                         boxShadow: pathname === '/scanner' ? "0 0 20px rgba(255, 204, 0, 0.9), inset 0 0 10px rgba(255, 204, 0, 0.5)" : "none",
                         borderColor: pathname === '/scanner' ? "rgba(255, 204, 0, 0.8)" : "var(--background)"
                     }}>
-                    📸
+                    💵
                 </span>
-                <span className="nav-text" style={{ marginTop: "15px" }}>Scanner</span>
+                <span className="nav-text" style={{ marginTop: "15px" }}>Spese</span>
             </Link>
             <Link href="/tasse" className={`nav-item ${pathname === '/tasse' ? 'active-nav' : ''}`}>
                 <span className="nav-icon">🧮</span>

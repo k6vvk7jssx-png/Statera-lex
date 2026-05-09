@@ -533,7 +533,7 @@ export default function Dashboard() {
 
           <div className="flex-row-between" style={{ width: "100%", marginTop: "1rem", flexWrap: "wrap", justifyContent: "space-around" }}>
             <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
-              <span style={{ fontSize: "0.8rem", opacity: 0.7 }}>In Tasca</span>
+              <span style={{ fontSize: "0.8rem", opacity: 0.7 }}>Netto</span>
               <div style={{ fontSize: "1.2rem", fontWeight: "bold", color: "var(--success)" }}>€{nettoPulito.toFixed(2)}</div>
             </div>
             <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>

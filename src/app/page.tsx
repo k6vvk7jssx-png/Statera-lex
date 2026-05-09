@@ -316,7 +316,7 @@ export default function Home() {
 
               <div className="bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20 p-6 rounded-2xl flex justify-between items-center">
                 <div>
-                  <p className="text-emerald-500/80 text-xs uppercase tracking-wider font-bold mb-1">Netto in Tasca Reale</p>
+                  <p className="text-emerald-500/80 text-xs uppercase tracking-wider font-bold mb-1">Netto Reale</p>
                   <p className="text-3xl font-extrabold text-white">€{calcoloSimulatore.netto.toLocaleString('it-IT', { maximumFractionDigits: 0 })}</p>
                 </div>
                 <Coins className="w-10 h-10 text-emerald-400 opacity-80" />

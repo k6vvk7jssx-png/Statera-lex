@@ -490,7 +490,7 @@ export default function Tasse() {
                             </div>
 
                             <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "0.5rem", fontSize: "1.2rem", fontWeight: "bold", color: "var(--success)" }}>
-                                <span>Netto in Tasca Stimato</span>
+                                <span>Netto Stimato</span>
                                 <span>€{datiAnnuali.nettoTasche.toFixed(2)}</span>
                             </div>
                         </div>
@@ -745,7 +745,7 @@ export default function Tasse() {
                             <h3 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>Come utilizzare l&apos;App</h3>
                             <ul style={{ paddingLeft: "1.2rem", margin: 0, opacity: 0.9 }}>
                                 <li><strong>Dashboard:</strong> Aggiungi qui le tue cause (entrate) e le tue spese (uscite). Scannerizza gli scontrini per un inserimento rapido.</li>
-                                <li><strong>Cassetto Fiscale:</strong> Visualizza in automatico le tasse, la cassa forense e il netto in tasca, calcolati in base alle entrate e uscite registrate.</li>
+                                <li><strong>Cassetto Fiscale:</strong> Visualizza in automatico le tasse, la cassa forense e il netto, calcolati in base alle entrate e uscite registrate.</li>
                                 <li><strong>Simulatore:</strong> Usa la sezione &quot;Simulatore&quot; per calcolare tasse e netto di un ipotetico incasso futuro, senza salvarlo nel database.</li>
                                 <li><strong>Impostazioni:</strong> Configura il tuo regime fiscale e la cassa forense standard per i calcoli automatici.</li>
                             </ul>
