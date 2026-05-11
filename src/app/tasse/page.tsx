@@ -37,6 +37,7 @@ export default function Tasse() {
     const [lordo, setLordo] = useState<string>("");
     const [regime, setRegime] = useState<"forfettario_5" | "forfettario_15" | "ordinario" | "free">("forfettario_15");
     const [scaglioneManuale, setScaglioneManuale] = useState<number>(43);
+    const [isOmnia, setIsOmnia] = useState(false);
     const [risultatoManuale, setRisultatoManuale] = useState<Record<string, number> | null>(null);
 
     // Stati per Calcolatore Spese Simulate
@@ -339,8 +340,12 @@ export default function Tasse() {
     };
 
     const calcolaManuale = () => {
-        const importoLordo = parseFloat(lordo.replace(",", "."));
+        let importoLordo = parseFloat(lordo.replace(",", "."));
         if (isNaN(importoLordo) || importoLordo <= 0) return;
+        
+        if (isOmnia) {
+            importoLordo = importoLordo / 1.196;
+        }
 
         let imponibile = 0, tasse = 0, cassa = 0, netto = 0, volumeAffariLordo = 0;
 
@@ -550,6 +555,21 @@ export default function Tasse() {
                             placeholder="Es: 1500"
                             className="ios-input"
                         />
+                        
+                        <div className="ios-card" style={{ marginTop: "0.5rem", padding: "10px", backgroundColor: "var(--background)" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div style={{ display: "flex", flexDirection: "column" }}>
+                                    <span style={{ fontSize: "0.9rem", fontWeight: "600" }}>Fattura Omnia</span>
+                                    <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>Importo già comprensivo di CPA e 15%</span>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={isOmnia}
+                                    onChange={(e) => setIsOmnia(e.target.checked)}
+                                    style={{ transform: "scale(1.2)" }}
+                                />
+                            </div>
+                        </div>
 
                         <label style={{ display: "block", marginTop: "1rem", marginBottom: "0.5rem", fontWeight: "600" }}>
                             Regime Fiscale del singolo compenso
@@ -747,6 +767,7 @@ export default function Tasse() {
                                 <li><strong>Dashboard:</strong> Aggiungi qui le tue cause (entrate) e le tue spese (uscite). Scannerizza gli scontrini per un inserimento rapido.</li>
                                 <li><strong>Cassetto Fiscale:</strong> Visualizza in automatico le tasse, la cassa forense e il netto, calcolati in base alle entrate e uscite registrate.</li>
                                 <li><strong>Simulatore:</strong> Usa la sezione &quot;Simulatore&quot; per calcolare tasse e netto di un ipotetico incasso futuro, senza salvarlo nel database.</li>
+                                <li><strong>Fattura Omnia:</strong> Se selezioni l'opzione "Fattura Omnia", l'app considera la cifra inserita come il totale omnicomprensivo liquidato, e andrà a sottrarre matematicamente il CPA (4%) e le Spese Generali (15%) prima di iniziare il calcolo delle tasse.</li>
                                 <li><strong>Impostazioni:</strong> Configura il tuo regime fiscale e la cassa forense standard per i calcoli automatici.</li>
                             </ul>
                         </div>

@@ -44,23 +44,29 @@ export default function Cause() {
         data: new Date().toISOString().split('T')[0],
         tipologia_fiscale: "forfettario_15" as import("@/lib/taxCalculator").RegimeFiscale,
         applicaIva: false,
-        applicaRitenuta: false
+        applicaRitenuta: false,
+        isOmnia: false
     });
 
     const calculatedTaxes = React.useMemo(() => {
-        const cLordo = parseFloat(nuovaCausa.compenso.replace(',', '.'));
+        let cLordo = parseFloat(nuovaCausa.compenso.replace(',', '.'));
         if (isNaN(cLordo) || cLordo <= 0) {
             return {
                 compensoBase: 0, speseGenerali15: 0, cpa4: 0, iva22: 0, ritenutaAcconto20: 0, nettoCalcolato: 0, totaleFatturaLordo: 0
             };
         }
+        
+        if (nuovaCausa.isOmnia) {
+            cLordo = cLordo / 1.196;
+        }
+
         return calculateInvoice(
             cLordo,
             nuovaCausa.tipologia_fiscale,
             nuovaCausa.applicaIva,
             nuovaCausa.applicaRitenuta
         );
-    }, [nuovaCausa.compenso, nuovaCausa.tipologia_fiscale, nuovaCausa.applicaIva, nuovaCausa.applicaRitenuta]);
+    }, [nuovaCausa.compenso, nuovaCausa.tipologia_fiscale, nuovaCausa.applicaIva, nuovaCausa.applicaRitenuta, nuovaCausa.isOmnia]);
 
     useEffect(() => {
         const savedRegime = localStorage.getItem("regime_fiscale_generale");
@@ -140,7 +146,8 @@ export default function Cause() {
                 data: new Date().toISOString().split('T')[0],
                 tipologia_fiscale: "forfettario_15",
                 applicaIva: false,
-                applicaRitenuta: false
+                applicaRitenuta: false,
+                isOmnia: false
             });
             await loadCause();
 
@@ -289,6 +296,21 @@ export default function Cause() {
                             value={nuovaCausa.compenso}
                             onChange={(e) => setNuovaCausa({ ...nuovaCausa, compenso: e.target.value })}
                         />
+                        
+                        <div className="ios-card" style={{ marginTop: "0.5rem", padding: "10px", backgroundColor: "var(--background)" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div style={{ display: "flex", flexDirection: "column" }}>
+                                    <span style={{ fontSize: "0.9rem", fontWeight: "600" }}>Fattura Omnia</span>
+                                    <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>Importo già comprensivo di CPA e 15%</span>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={nuovaCausa.isOmnia}
+                                    onChange={(e) => setNuovaCausa({ ...nuovaCausa, isOmnia: e.target.checked })}
+                                    style={{ transform: "scale(1.2)" }}
+                                />
+                            </div>
+                        </div>
 
                         <label style={{ display: "block", marginBottom: "0.5rem", fontSize: "0.9rem", opacity: 0.7, marginTop: "1rem" }}>Regime Fiscale Applicato</label>
                         <select

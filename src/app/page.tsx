@@ -15,6 +15,7 @@ export default function Home() {
   const [simLordo, setSimLordo] = useState<string>("50000");
   const [simRegime, setSimRegime] = useState<"forfettario_5" | "forfettario_15" | "ordinario">("forfettario_15");
   const [simScaglione, setSimScaglione] = useState<number>(43);
+  const [simOmnia, setSimOmnia] = useState(false);
 
   useEffect(() => {
     if (isLoaded && isSignedIn) {
@@ -24,7 +25,10 @@ export default function Home() {
 
   // Simulatore Fiscale Logica
   const calcoloSimulatore = useMemo(() => {
-    const importoLordo = parseFloat(simLordo) || 0;
+    let importoLordo = parseFloat(simLordo) || 0;
+    if (simOmnia && importoLordo > 0) {
+      importoLordo = importoLordo / 1.196;
+    }
 
     const CASSA_ALIQUOTA_BASE = 0.17;
     const CASSA_ALIQUOTA_ECCEDENZA = 0.03;
@@ -101,7 +105,7 @@ export default function Home() {
 
       return { tasse, cassa: cassaTotale, netto: nettoStima, volumeAffariLordo, ritenuta: ritenutaScontata };
     }
-  }, [simLordo, simRegime, simScaglione]);
+  }, [simLordo, simRegime, simScaglione, simOmnia]);
 
   if (!isLoaded || isSignedIn) {
     return (
@@ -246,6 +250,17 @@ export default function Home() {
                     className="w-full bg-black/30 border border-white/10 rounded-xl py-4 pl-10 pr-4 text-white text-xl font-semibold outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-all"
                   />
                 </div>
+                
+                <div className="mt-3 flex items-center justify-between bg-white/5 border border-white/10 rounded-xl p-3 cursor-pointer" onClick={() => setSimOmnia(!simOmnia)}>
+                    <div className="flex flex-col">
+                        <span className="text-sm font-semibold text-white">Fattura Omnia</span>
+                        <span className="text-xs text-slate-400">Importo già comprensivo di CPA e 15%</span>
+                    </div>
+                    <div className={`w-12 h-6 rounded-full transition-colors flex items-center px-1 ${simOmnia ? 'bg-emerald-500' : 'bg-slate-700'}`}>
+                        <div className={`w-4 h-4 rounded-full bg-white transition-transform ${simOmnia ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </div>
+                </div>
+
                 <div className="mt-2 flex justify-between items-center text-xs text-slate-400 px-2">
                   <span>Volume d'Affari Finale (+15%{simRegime === 'ordinario' ? ', CPA, IVA' : ', CPA'})</span>
                   <span className="font-bold text-slate-200">€{calcoloSimulatore.volumeAffariLordo.toLocaleString('it-IT', { maximumFractionDigits: 0 })}</span>
