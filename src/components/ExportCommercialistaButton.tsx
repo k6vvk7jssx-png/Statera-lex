@@ -10,6 +10,45 @@ import { getProfiloAction } from "@/app/impostazioni/actions";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+// --- COSTANTI DEDUCIBILITA' ---
+const DEDUCIBILITA_MAP: Record<string, number> = {
+    "Lavoro": 1.0, "Cancelleria": 1.0, "Software": 1.0,
+    "Spese Clienti": 1.0, "Rappresentanza": 1.0, "Formazione": 1.0,
+    "Abbigliamento": 1.0, "Tasse": 1.0,
+    "Telefonia": 0.80,
+    "Ristoranti": 0.75, "Ristoranti / Trasferte": 0.75,
+    "Utenze": 0.50, "Affitto": 0.50,
+    "Auto/Trasporti": 0.20, "Carburante": 0.20, "Viaggi": 0.20,
+    "Alimenti": 0, "Salute": 0, "Senza Tasse": 0, "Imprevisti": 0, "Altro": 0,
+};
+
+// --- COSTANTI CASSA FORENSE ---
+const CASSA_ALIQUOTA_BASE = 0.17;
+const CASSA_ALIQUOTA_ECCEDENZA = 0.03;
+const CASSA_TETTO = 135000;
+const CASSA_MATERNITA = 100;
+
+// --- HELPER: formatta data gg/mm/aaaa ---
+function fmtDate(dateStr: string | null | undefined): string {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
+// --- HELPER: imposta larghezze colonne auto ---
+function autoWidth(ws: XLSX.WorkSheet, data: Record<string, unknown>[], minWidth = 10) {
+    if (!data.length) return;
+    const keys = Object.keys(data[0]);
+    ws['!cols'] = keys.map((k) => {
+        const maxLen = Math.max(
+            k.length,
+            ...data.map(row => String(row[k] ?? "").length)
+        );
+        return { wch: Math.max(minWidth, Math.min(maxLen + 2, 40)) };
+    });
+}
+
 export default function ExportCommercialistaButton() {
     const [isExporting, setIsExporting] = useState(false);
     const { user } = useUser();
@@ -34,33 +73,34 @@ export default function ExportCommercialistaButton() {
     };
 
     const handleExport = async () => {
-        if (!user) {
-            alert("Utente non autenticato.");
-            return;
-        }
-
+        if (!user) { alert("Utente non autenticato."); return; }
         setIsExporting(true);
 
         try {
             const supabase = getSupabase();
-            const today = new Date();
-            const startOfYear = `${today.getFullYear()}-01-01`;
+            const anno = new Date().getFullYear();
+            const startOfYear = `${anno}-01-01`;
 
-            // 1. Fetch Regime Fiscale
+            // ========================================
+            // 0. PROFILO UTENTE
+            // ========================================
             const profiloResult = await getProfiloAction();
             const profile = profiloResult.data;
-            let isRegimeOrdinario = false;
+            let isOrdinario = false;
             let regimeName = "Forfettario";
-            
-            if (profile && profile.regime_fiscale === "ordinario") {
-                isRegimeOrdinario = true;
+
+            if (profile?.regime_fiscale === "ordinario" || localStorage.getItem("regime_fiscale_generale") === "ordinario") {
+                isOrdinario = true;
                 regimeName = "Ordinario";
-            } else if (localStorage.getItem("regime_fiscale_generale") === "ordinario") {
-                isRegimeOrdinario = true;
-                regimeName = "Ordinario";
+            } else if (profile?.regime_fiscale?.includes("forfettario_5")) {
+                regimeName = "Forfettario 5%";
+            } else {
+                regimeName = "Forfettario 15%";
             }
 
-            // 2. Fetch Fatture (Entrate YTD)
+            // ========================================
+            // 1. FETCH FATTURE
+            // ========================================
             const { data: cause, error: errCause } = await supabase
                 .from('cause')
                 .select('*')
@@ -70,8 +110,10 @@ export default function ExportCommercialistaButton() {
 
             if (errCause) throw errCause;
 
-            // 3. Fetch Spese (Uscite YTD)
-            const { data: transazioni, error: errTransazioni } = await supabase
+            // ========================================
+            // 2. FETCH SPESE
+            // ========================================
+            const { data: transazioni, error: errTrans } = await supabase
                 .from('transazioni')
                 .select('*')
                 .eq('user_id', user.id)
@@ -79,146 +121,258 @@ export default function ExportCommercialistaButton() {
                 .gte('data_transazione', startOfYear)
                 .order('data_transazione', { ascending: true });
 
-            if (errTransazioni) throw errTransazioni;
+            if (errTrans) throw errTrans;
 
-            // --- FOGLIO 1: FATTURE EMESSE ---
-            let totaleIncassato = 0; // Compenso + Spese Generali
+            // ========================================
+            // CALCOLI AGGREGATI
+            // ========================================
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const anomalie: any[] = [];
+            let idFattura = 0;
+
+            // --- FATTURE ---
+            let totFatturato = 0;
+            let totIncassato = 0;
+            let totDaIncassare = 0;
             let sumCpa = 0;
             let sumIva = 0;
             let sumRitenute = 0;
 
-            const fattureData = (cause || []).map(c => {
-                const dataFattura = c.data_sentenza ? new Date(c.data_sentenza).toLocaleDateString() : "N/D";
-                const cliente = c.cliente || c.titolo || "N/D";
-                const compenso = Number(c.compenso_base || c.compenso_lordo || 0);
-                const speseGenerali = compenso * 0.15;
-                const speseArt15 = c.spese_esenti ? Number(c.spese_esenti) : 0;
-                const imponibileLordo = compenso + speseGenerali;
-                
-                totaleIncassato += imponibileLordo;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const fattureRows = (cause || []).map((c: any) => {
+                idFattura++;
+                const compensoBase = Number(c.compenso_base || c.compenso_lordo || 0);
+                const speseGen = compensoBase * 0.15;
+                const imponibileCassa = compensoBase + speseGen;
+                const cpa = c.cpa_4 ? Number(c.cpa_4) : imponibileCassa * 0.04;
+                const iva = c.iva_22 ? Number(c.iva_22) : 0;
+                const ritenuta = c.ritenuta_acconto_20 ? Number(c.ritenuta_acconto_20) : (c.ritenuta_20 ? Number(c.ritenuta_20) : 0);
+                const bollo = 0; // Non gestito nel DB attuale
+                const totaleFattura = compensoBase + speseGen + cpa + iva + bollo;
+                const nettoIncassato = totaleFattura - ritenuta;
 
-                const cpa = c.cpa_4 ? Number(c.cpa_4) : imponibileLordo * 0.04;
-                const iva = c.iva_22 ? Number(c.iva_22) : (isRegimeOrdinario ? (imponibileLordo + cpa) * 0.22 : 0);
-                const totaleLordo = imponibileLordo + cpa + iva + speseArt15;
+                const isIncassata = c.stato === "incassata";
+                const statoPagamento = isIncassata ? "Incassata" : "Da Riscuotere";
 
-                const ritenuta = c.ritenuta_20 ? Number(c.ritenuta_20) : (isRegimeOrdinario ? imponibileLordo * 0.20 : 0);
-                const nettoIncassato = totaleLordo - ritenuta;
-
+                totFatturato += totaleFattura;
+                if (isIncassata) {
+                    totIncassato += nettoIncassato;
+                } else {
+                    totDaIncassare += totaleFattura;
+                }
                 sumCpa += cpa;
                 sumIva += iva;
                 sumRitenute += ritenuta;
 
-                return {
-                    "Data": dataFattura,
-                    "Cliente / Pratica": cliente,
-                    "Compenso (€)": compenso.toFixed(2),
-                    "Spese Generali (15%) (€)": speseGenerali.toFixed(2),
-                    "Spese Art. 15 (€)": speseArt15.toFixed(2),
-                    "CPA (€)": cpa.toFixed(2),
-                    "IVA (€)": iva.toFixed(2),
-                    "Ritenuta d'Acconto (€)": ritenuta.toFixed(2),
-                    "Totale Lordo Fattura (€)": totaleLordo.toFixed(2),
-                    "Netto Incassato (€)": nettoIncassato.toFixed(2)
-                };
-            });
-
-            // --- FOGLIO 2: SPESE SOSTENUTE ---
-            let totaleSpeseDeducibili = 0;
-
-            const speseData = (transazioni || []).map(t => {
-                const dataSpesa = t.data_transazione ? new Date(t.data_transazione).toLocaleDateString() : "N/D";
-                const fornitore = t.descrizione || "N/D";
-                const categoria = t.categoria || "Altro";
-                // L'importo reale immesso
-                const importo = Number(t.importo || 0);
-
-                let rate = 0;
-                switch (categoria) {
-                    case "Lavoro": case "Cancelleria": case "Software": case "Spese Clienti": case "Rappresentanza": case "Formazione": case "Abbigliamento": case "Toga":
-                        rate = 1.0; break;
-                    case "Telefonia":
-                        rate = 0.80; break;
-                    // Mappa entrambe le varianti
-                    case "Ristoranti": case "Ristoranti / Trasferte":
-                        rate = 0.75; break;
-                    case "Utenze": case "Affitto":
-                        rate = 0.50; break;
-                    case "Auto/Trasporti": case "Carburante": case "Viaggi": case "Auto":
-                        rate = 0.20; break;
-                    case "Tasse":
-                        rate = 1.0; break;
+                // --- ANOMALIE FATTURE ---
+                if (isIncassata && !c.data_sentenza) {
+                    anomalie.push({ Tipo: "Fattura", "Gravità": "Media", Riferimento: `FAT-${idFattura}`, Descrizione: "Fattura incassata senza data", "Cosa controllare": "Verificare la data di incasso" });
+                }
+                if (!isIncassata) {
+                    anomalie.push({ Tipo: "Fattura", "Gravità": "Bassa", Riferimento: `FAT-${idFattura}`, Descrizione: `Fattura non incassata: ${c.nome_causa}`, "Cosa controllare": "Sollecitare il pagamento" });
+                }
+                if (iva > 0 && !isOrdinario) {
+                    anomalie.push({ Tipo: "Fattura", "Gravità": "Alta", Riferimento: `FAT-${idFattura}`, Descrizione: "IVA presente in regime forfettario", "Cosa controllare": "Verificare il regime fiscale della fattura" });
+                }
+                // Verifica coerenza totale
+                const totAtteso = compensoBase + speseGen + cpa + iva;
+                const diff = Math.abs(totaleFattura - totAtteso);
+                if (diff > 0.02) {
+                    anomalie.push({ Tipo: "Fattura", "Gravità": "Alta", Riferimento: `FAT-${idFattura}`, Descrizione: `Totale fattura non coerente (diff: €${diff.toFixed(2)})`, "Cosa controllare": "Ricalcolare compenso + spese + CPA + IVA" });
                 }
 
-                const importoDeducibile = isRegimeOrdinario ? (importo * rate) : 0;
-                totaleSpeseDeducibili += importoDeducibile;
-
                 return {
-                    "Data": dataSpesa,
-                    "Fornitore / Descrizione": fornitore,
-                    "Categoria": categoria,
-                    "Importo Speso (Lordo IVA) (€)": importo.toFixed(2),
-                    "% Deducibilità": isRegimeOrdinario ? `${(rate * 100).toFixed(0)}%` : "N/A",
-                    "Importo Deducibile Netto (€)": importoDeducibile.toFixed(2)
+                    "ID": `FAT-${idFattura}`,
+                    "Data": fmtDate(c.data_sentenza),
+                    "Cliente": c.nome_causa || "N/D",
+                    "Stato pagamento": statoPagamento,
+                    "Data incasso": isIncassata ? fmtDate(c.data_sentenza) : "",
+                    "Compenso base (€)": compensoBase.toFixed(2),
+                    "Spese generali (€)": speseGen.toFixed(2),
+                    "CPA 4% (€)": cpa.toFixed(2),
+                    "IVA 22% (€)": iva.toFixed(2),
+                    "Ritenuta 20% (€)": ritenuta.toFixed(2),
+                    "Bollo (€)": bollo.toFixed(2),
+                    "Totale fattura (€)": totaleFattura.toFixed(2),
+                    "Netto incassato (€)": nettoIncassato.toFixed(2),
+                    "Note": c.tipologia_fiscale || "",
                 };
             });
 
-            // --- FOGLIO 3: RIEPILOGO FISCALE ---
-            let imponibileFiscale = 0;
-            if (isRegimeOrdinario) {
-                imponibileFiscale = Math.max(0, totaleIncassato - totaleSpeseDeducibili);
+            // --- SPESE ---
+            let totSpesePagate = 0;
+            let totSpeseDeducibili = 0;
+            let totSpeseNonDeducibili = 0;
+            let idSpesa = 0;
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const speseRows = (transazioni || []).map((t: any) => {
+                idSpesa++;
+                const importo = Number(t.importo || 0);
+                const categoria = t.categoria || "Altro";
+                const rate = DEDUCIBILITA_MAP[categoria] ?? 0;
+                const importoDeducibile = isOrdinario ? +(importo * rate).toFixed(2) : 0;
+                const importoNonDeducibile = isOrdinario ? +(importo - importoDeducibile).toFixed(2) : importo;
+                const fiscalmenteRilevante = rate > 0 ? "Sì" : "No";
+
+                totSpesePagate += importo;
+                totSpeseDeducibili += importoDeducibile;
+                totSpeseNonDeducibili += importoNonDeducibile;
+
+                // --- ANOMALIE SPESE ---
+                if (!categoria || categoria === "Altro") {
+                    anomalie.push({ Tipo: "Spesa", "Gravità": "Bassa", Riferimento: `SPE-${idSpesa}`, Descrizione: "Spesa senza categoria specifica", "Cosa controllare": "Assegnare la categoria corretta" });
+                }
+
+                return {
+                    "ID": `SPE-${idSpesa}`,
+                    "Data": fmtDate(t.data_transazione),
+                    "Fornitore": t.descrizione || "N/D",
+                    "Categoria": categoria,
+                    "Totale pagato (€)": importo.toFixed(2),
+                    "% deducibile": isOrdinario ? `${(rate * 100).toFixed(0)}%` : "N/A (Forf.)",
+                    "Importo deducibile (€)": importoDeducibile.toFixed(2),
+                    "Importo NON deducibile (€)": importoNonDeducibile.toFixed(2),
+                    "Fiscalmente rilevante": fiscalmenteRilevante,
+                    "Note": "",
+                };
+            });
+
+            // --- CALCOLI FISCO ---
+            // Per il lordoIncassato usiamo solo le cause incassate
+            let lordoIncassatoPerFisco = 0;
+            (cause || []).forEach(c => {
+                if (c.stato !== "incassata") return;
+                const comp = Number(c.compenso_base || c.compenso_lordo || 0);
+                lordoIncassatoPerFisco += comp + comp * 0.15;
+            });
+
+            let imponibileStimato = 0;
+            if (isOrdinario) {
+                imponibileStimato = Math.max(0, lordoIncassatoPerFisco - totSpeseDeducibili);
             } else {
-                imponibileFiscale = totaleIncassato * 0.78;
+                imponibileStimato = lordoIncassatoPerFisco * 0.78;
             }
 
-            const CASSA_ALIQUOTA_BASE = 0.17;
-            const CASSA_ALIQUOTA_ECCEDENZA = 0.03;
-            const CASSA_TETTO = 135000;
-            const CASSA_MATERNITA_ANNUALE = 100;
-
-            let cassaTeorica = 0;
-            if (imponibileFiscale <= CASSA_TETTO) {
-                cassaTeorica = imponibileFiscale * CASSA_ALIQUOTA_BASE;
+            // Cassa Forense
+            let cassaSoggettiva = 0;
+            if (imponibileStimato <= CASSA_TETTO) {
+                cassaSoggettiva = imponibileStimato * CASSA_ALIQUOTA_BASE;
             } else {
-                cassaTeorica = (CASSA_TETTO * CASSA_ALIQUOTA_BASE) + ((imponibileFiscale - CASSA_TETTO) * CASSA_ALIQUOTA_ECCEDENZA);
+                cassaSoggettiva = (CASSA_TETTO * CASSA_ALIQUOTA_BASE) + ((imponibileStimato - CASSA_TETTO) * CASSA_ALIQUOTA_ECCEDENZA);
             }
-            cassaTeorica += CASSA_MATERNITA_ANNUALE;
 
-            const riepilogoData = [
-                { "Voce": "Totale Incassato (Compenso + Spese Generali)", "Valore": `€ ${totaleIncassato.toFixed(2)}` },
-                { "Voce": "Regime Fiscale Applicato", "Valore": regimeName },
-                { "Voce": "Totale Spese Deducibili Applicate", "Valore": isRegimeOrdinario ? `€ ${totaleSpeseDeducibili.toFixed(2)}` : "€ 0.00 (Forfettario)" },
-                { "Voce": "Imponibile Fiscale Calcolato", "Valore": `€ ${imponibileFiscale.toFixed(2)}` },
-                { "Voce": "Cassa Forense Teorica (Maturata)", "Valore": `€ ${cassaTeorica.toFixed(2)}` },
-                { "Voce": "Totale CPA Maturato (4%)", "Valore": `€ ${sumCpa.toFixed(2)}` },
-                { "Voce": "Totale IVA Incassata (A Debito)", "Valore": `€ ${sumIva.toFixed(2)}` },
-                { "Voce": "Totale Ritenute Subite (Credito IRPEF)", "Valore": `€ ${sumRitenute.toFixed(2)}` },
-                { "Voce": "Alert Minimale", "Valore": "Nota: Contributo Soggettivo Minimo di Legge ~3.600€ annui" }
+            // Tasse stimate
+            let tasseStimate = 0;
+            if (isOrdinario) {
+                const baseIrpef = Math.max(0, imponibileStimato - cassaSoggettiva);
+                let irpef = 0;
+                if (baseIrpef > 0) {
+                    irpef += Math.min(baseIrpef, 28000) * 0.23;
+                    if (baseIrpef > 28000) irpef += Math.min(baseIrpef - 28000, 22000) * 0.33;
+                    if (baseIrpef > 50000) irpef += (baseIrpef - 50000) * 0.43;
+                }
+                tasseStimate = irpef;
+            } else {
+                const baseImposta = Math.max(0, imponibileStimato - cassaSoggettiva);
+                const aliquota = regimeName.includes("5%") ? 0.05 : 0.15;
+                tasseStimate = baseImposta * aliquota;
+            }
+
+            // Netti
+            const nettoTeorico = totIncassato - tasseStimate - sumCpa - cassaSoggettiva - CASSA_MATERNITA - totSpesePagate;
+            const soldoDaAccantonare = tasseStimate + sumCpa + cassaSoggettiva + CASSA_MATERNITA + sumIva;
+            const nettoPrudenziale = totIncassato - soldoDaAccantonare - totSpesePagate;
+
+            // --- VERSAMENTI (placeholder: l'app non ha ancora una tabella versamenti) ---
+            const versamentiRows = [
+                { "ID": "", "Data pagamento": "", "Tipo versamento": "", "Codice tributo": "", "Periodo": `Anno ${anno}`, "Importo (€)": "", "Metodo pagamento": "", "Note": "Nessun versamento registrato — compilare manualmente" }
             ];
 
-            // 1. Crea in memoria un nuovo Workbook Excel
+            // Anomalia versamenti mancanti
+            anomalie.push({ Tipo: "Versamento", "Gravità": "Media", Riferimento: "—", Descrizione: "Nessun versamento F24/Cassa registrato nell'app", "Cosa controllare": "Compilare manualmente il foglio VERSAMENTI o aggiornare l'app" });
+
+            if (anomalie.length === 0) {
+                anomalie.push({ Tipo: "—", "Gravità": "—", Riferimento: "—", Descrizione: "Nessuna anomalia rilevata", "Cosa controllare": "—" });
+            }
+
+            // ========================================
+            // FOGLIO RIEPILOGO (struttura chiave-valore)
+            // ========================================
+            const riepilogoRows = [
+                { "Sezione": "DATI GENERALI", "Voce": "Anno fiscale", "Valore": anno },
+                { "Sezione": "", "Voce": "Regime fiscale", "Valore": regimeName },
+                { "Sezione": "", "Voce": "Data export", "Valore": fmtDate(new Date().toISOString()) },
+                { "Sezione": "", "Voce": "", "Valore": "" },
+                { "Sezione": "ENTRATE", "Voce": "Totale fatturato", "Valore": `€ ${totFatturato.toFixed(2)}` },
+                { "Sezione": "", "Voce": "Totale incassato (netto ritenute)", "Valore": `€ ${totIncassato.toFixed(2)}` },
+                { "Sezione": "", "Voce": "Totale da incassare", "Valore": `€ ${totDaIncassare.toFixed(2)}` },
+                { "Sezione": "", "Voce": "", "Valore": "" },
+                { "Sezione": "SPESE", "Voce": "Totale spese pagate", "Valore": `€ ${totSpesePagate.toFixed(2)}` },
+                { "Sezione": "", "Voce": "Totale spese deducibili", "Valore": isOrdinario ? `€ ${totSpeseDeducibili.toFixed(2)}` : "N/A (Forfettario)" },
+                { "Sezione": "", "Voce": "Totale spese non deducibili", "Valore": isOrdinario ? `€ ${totSpeseNonDeducibili.toFixed(2)}` : "N/A (Forfettario)" },
+                { "Sezione": "", "Voce": "", "Valore": "" },
+                { "Sezione": "FISCO", "Voce": "Imponibile stimato", "Valore": `€ ${imponibileStimato.toFixed(2)}` },
+                { "Sezione": "", "Voce": "Tasse stimate (IRPEF/Sostitutiva)", "Valore": `€ ${tasseStimate.toFixed(2)}` },
+                { "Sezione": "", "Voce": "IVA da versare", "Valore": `€ ${sumIva.toFixed(2)}` },
+                { "Sezione": "", "Voce": "Ritenute subite (credito)", "Valore": `€ ${sumRitenute.toFixed(2)}` },
+                { "Sezione": "", "Voce": "F24 già pagati", "Valore": "Da compilare" },
+                { "Sezione": "", "Voce": "", "Valore": "" },
+                { "Sezione": "CASSA FORENSE", "Voce": "CPA incassata (4%)", "Valore": `€ ${sumCpa.toFixed(2)}` },
+                { "Sezione": "", "Voce": "Cassa soggettiva stimata", "Valore": `€ ${cassaSoggettiva.toFixed(2)}` },
+                { "Sezione": "", "Voce": "Maternità", "Valore": `€ ${CASSA_MATERNITA.toFixed(2)}` },
+                { "Sezione": "", "Voce": "Cassa già versata", "Valore": "Da compilare" },
+                { "Sezione": "", "Voce": "Cassa ancora da versare", "Valore": "Da compilare" },
+                { "Sezione": "", "Voce": "Minimale annuo di legge", "Valore": "€ 3.600,00" },
+                { "Sezione": "", "Voce": "", "Valore": "" },
+                { "Sezione": "NETTO", "Voce": "Netto teorico", "Valore": `€ ${nettoTeorico.toFixed(2)}` },
+                { "Sezione": "", "Voce": "Netto prudenziale (dopo accantonamenti)", "Valore": `€ ${nettoPrudenziale.toFixed(2)}` },
+                { "Sezione": "", "Voce": "Soldi da accantonare", "Valore": `€ ${soldoDaAccantonare.toFixed(2)}` },
+                { "Sezione": "", "Voce": "Liquidità realmente disponibile", "Valore": `€ ${Math.max(0, nettoPrudenziale).toFixed(2)}` },
+            ];
+
+            // ========================================
+            // CREAZIONE WORKBOOK
+            // ========================================
             const wb = XLSX.utils.book_new();
 
-            // 2. Converte l'array di oggetti in fogli gestibili
-            const wsFatture = fattureData.length > 0 ? XLSX.utils.json_to_sheet(fattureData) : XLSX.utils.json_to_sheet([{"Messaggio": "Nessuna fattura trovata quest'anno"}]);
-            const wsSpese = speseData.length > 0 ? XLSX.utils.json_to_sheet(speseData) : XLSX.utils.json_to_sheet([{"Messaggio": "Nessuna spesa trovata quest'anno"}]);
-            const wsRiepilogo = XLSX.utils.json_to_sheet(riepilogoData);
+            // 1. RIEPILOGO
+            const wsRiepilogo = XLSX.utils.json_to_sheet(riepilogoRows);
+            wsRiepilogo['!cols'] = [{ wch: 18 }, { wch: 40 }, { wch: 25 }];
+            XLSX.utils.book_append_sheet(wb, wsRiepilogo, "RIEPILOGO");
 
-            // Larghezze colonne ottimizzate
-            wsFatture['!cols'] = [{ wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 22 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 22 }, { wch: 24 }, { wch: 20 }];
-            wsSpese['!cols'] = [{ wch: 12 }, { wch: 35 }, { wch: 20 }, { wch: 30 }, { wch: 15 }, { wch: 30 }];
-            wsRiepilogo['!cols'] = [{ wch: 60 }, { wch: 30 }];
+            // 2. FATTURE
+            const wsFatture = fattureRows.length > 0
+                ? XLSX.utils.json_to_sheet(fattureRows)
+                : XLSX.utils.json_to_sheet([{ "Messaggio": "Nessuna fattura registrata nell'anno" }]);
+            if (fattureRows.length > 0) autoWidth(wsFatture, fattureRows);
+            wsFatture['!autofilter'] = { ref: `A1:N${fattureRows.length + 1}` };
+            XLSX.utils.book_append_sheet(wb, wsFatture, "FATTURE");
 
-            // 3. Aggiunge i fogli creati al Workbook con i nomi richiesti
-            XLSX.utils.book_append_sheet(wb, wsFatture, "Fatture_Emesse");
-            XLSX.utils.book_append_sheet(wb, wsSpese, "Spese_Sostenute");
-            XLSX.utils.book_append_sheet(wb, wsRiepilogo, "Riepilogo_Fiscale");
+            // 3. SPESE
+            const wsSpese = speseRows.length > 0
+                ? XLSX.utils.json_to_sheet(speseRows)
+                : XLSX.utils.json_to_sheet([{ "Messaggio": "Nessuna spesa registrata nell'anno" }]);
+            if (speseRows.length > 0) autoWidth(wsSpese, speseRows);
+            wsSpese['!autofilter'] = { ref: `A1:J${speseRows.length + 1}` };
+            XLSX.utils.book_append_sheet(wb, wsSpese, "SPESE");
 
-            // 4. Salva il file forzando il download sul browser del cliente
-            XLSX.writeFile(wb, `Export_Fiscale_StateraLex.xlsx`);
+            // 4. VERSAMENTI
+            const wsVersamenti = XLSX.utils.json_to_sheet(versamentiRows);
+            wsVersamenti['!cols'] = [{ wch: 8 }, { wch: 16 }, { wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 40 }];
+            XLSX.utils.book_append_sheet(wb, wsVersamenti, "VERSAMENTI");
+
+            // 5. ANOMALIE
+            const wsAnomalie = XLSX.utils.json_to_sheet(anomalie);
+            autoWidth(wsAnomalie, anomalie);
+            XLSX.utils.book_append_sheet(wb, wsAnomalie, "ANOMALIE");
+
+            // --- DOWNLOAD ---
+            XLSX.writeFile(wb, `StateraLex_Export_${anno}.xlsx`);
 
         } catch (error) {
-            console.error("Errore durante l'export in Excel:", error);
-            alert("Si è verificato un errore durante la generazione dell'Excel.");
+            console.error("Errore durante l'export:", error);
+            alert("Errore durante la generazione dell'Excel.");
         } finally {
             setIsExporting(false);
         }
@@ -232,9 +386,7 @@ export default function ExportCommercialistaButton() {
                     ? "bg-stone-800 text-stone-400 cursor-not-allowed scale-95 opacity-80"
                     : "bg-[#1C1C1E] text-white hover:bg-[#2C2C2E] hover:scale-[0.98] border border-white/5 active:bg-[#3C3C3E]"
                 }`}
-            style={{
-                backdropFilter: "blur(10px)" // Tocco iOS
-            }}
+            style={{ backdropFilter: "blur(10px)" }}
         >
             {isExporting ? (
                 <>

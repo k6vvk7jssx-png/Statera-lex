@@ -45,7 +45,8 @@ export default function Cause() {
         tipologia_fiscale: "forfettario_15" as import("@/lib/taxCalculator").RegimeFiscale,
         applicaIva: false,
         applicaRitenuta: false,
-        isOmnia: false
+        isOmnia: false,
+        stato: "incassata" as "incassata" | "da_riscuotere"
     });
 
     const calculatedTaxes = React.useMemo(() => {
@@ -129,7 +130,7 @@ export default function Cause() {
                 netto_calcolato: calculatedTaxes.nettoCalcolato,
                 data_sentenza: nuovaCausa.data,
                 tipologia_fiscale: nuovaCausa.tipologia_fiscale,
-                stato: "incassata"
+                stato: nuovaCausa.stato
             };
 
             const supabase = getSupabase();
@@ -147,7 +148,8 @@ export default function Cause() {
                 tipologia_fiscale: "forfettario_15",
                 applicaIva: false,
                 applicaRitenuta: false,
-                isOmnia: false
+                isOmnia: false,
+                stato: "incassata"
             });
             await loadCause();
 
@@ -189,6 +191,24 @@ export default function Cause() {
         }
     };
 
+    const handleToggleStato = async (id: string, currentStato: string) => {
+        const newStato = currentStato === "incassata" ? "da_riscuotere" : "incassata";
+        try {
+            const supabase = getSupabase();
+            const { error } = await supabase
+                .from('cause')
+                .update({ stato: newStato })
+                .eq('id', id)
+                .eq('user_id', user?.id);
+            if (error) throw error;
+            await loadCause();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } catch (error: any) {
+            console.error('Errore aggiornamento stato:', error);
+            alert("Errore: " + error.message);
+        }
+    };
+
     if (!isLoaded || !isSignedIn) return null;
 
     return (
@@ -213,15 +233,18 @@ export default function Cause() {
                 </div>
             ) : (
                 causeList.map((causa) => (
-                    <div key={causa.id} className="ios-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div key={causa.id} className="ios-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderLeft: causa.stato === "da_riscuotere" ? "3px solid #FF9500" : "3px solid var(--success)" }}>
                         <div>
-                            <h3 style={{ marginBottom: "4px" }}>{causa.nome}</h3>
+                            <h3 style={{ marginBottom: "4px" }}>
+                                {causa.stato === "da_riscuotere" && <span title="Da riscuotere" style={{ color: "#FF9500", marginRight: "4px" }}>⚠️</span>}
+                                {causa.nome}
+                            </h3>
                             <span style={{ fontSize: "0.85rem", opacity: 0.6 }}>{causa.data}</span>
                         </div>
                         <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                                <div style={{ fontSize: "1.1rem", fontWeight: "600", color: causa.stato === "incassata" ? "var(--success)" : "var(--foreground)" }}>
-                                    €{causa.compenso}
+                                <div style={{ fontSize: "1.1rem", fontWeight: "600", color: causa.stato === "incassata" ? "var(--success)" : "#FF9500" }}>
+                                    €{causa.compenso}{causa.stato === "da_riscuotere" ? "*" : ""}
                                 </div>
                                 <button
                                     onClick={(e) => handleDeleteCausa(causa.id, e)}
@@ -231,18 +254,23 @@ export default function Cause() {
                                     🗑️
                                 </button>
                             </div>
-                            <span style={{
-                                fontSize: "0.75rem",
-                                padding: "4px 8px",
-                                borderRadius: "12px",
-                                background: causa.stato === "incassata" ? "rgba(52,199,89,0.1)" : "rgba(0,122,255,0.1)",
-                                color: causa.stato === "incassata" ? "var(--success)" : "var(--primary)",
-                                textTransform: "uppercase",
-                                fontWeight: "600",
-                                marginTop: "5px"
-                            }}>
-                                {causa.stato || "Registrata"}
-                            </span>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleToggleStato(causa.id, causa.stato); }}
+                                style={{
+                                    fontSize: "0.75rem",
+                                    padding: "4px 8px",
+                                    borderRadius: "12px",
+                                    background: causa.stato === "incassata" ? "rgba(52,199,89,0.1)" : "rgba(255,149,0,0.1)",
+                                    color: causa.stato === "incassata" ? "var(--success)" : "#FF9500",
+                                    textTransform: "uppercase",
+                                    fontWeight: "600",
+                                    marginTop: "5px",
+                                    border: "none",
+                                    cursor: "pointer"
+                                }}
+                            >
+                                {causa.stato === "incassata" ? "✅ Incassata" : "⏳ Da Riscuotere"}
+                            </button>
                         </div>
                     </div>
                 ))
@@ -286,6 +314,32 @@ export default function Cause() {
                             value={nuovaCausa.data}
                             onChange={(e) => setNuovaCausa({ ...nuovaCausa, data: e.target.value })}
                         />
+                        
+                        <div style={{ display: "flex", gap: "8px", marginTop: "0.75rem" }}>
+                            <button
+                                onClick={() => setNuovaCausa({ ...nuovaCausa, stato: "incassata" })}
+                                style={{
+                                    flex: 1, padding: "10px", borderRadius: "12px", border: "none", cursor: "pointer", fontWeight: "600", fontSize: "0.85rem",
+                                    background: nuovaCausa.stato === "incassata" ? "rgba(52,199,89,0.2)" : "rgba(128,128,128,0.1)",
+                                    color: nuovaCausa.stato === "incassata" ? "var(--success)" : "inherit",
+                                    outline: nuovaCausa.stato === "incassata" ? "2px solid var(--success)" : "none"
+                                }}
+                            >
+                                ✅ Incassata
+                            </button>
+                            <button
+                                onClick={() => setNuovaCausa({ ...nuovaCausa, stato: "da_riscuotere" })}
+                                style={{
+                                    flex: 1, padding: "10px", borderRadius: "12px", border: "none", cursor: "pointer", fontWeight: "600", fontSize: "0.85rem",
+                                    background: nuovaCausa.stato === "da_riscuotere" ? "rgba(255,149,0,0.2)" : "rgba(128,128,128,0.1)",
+                                    color: nuovaCausa.stato === "da_riscuotere" ? "#FF9500" : "inherit",
+                                    outline: nuovaCausa.stato === "da_riscuotere" ? "2px solid #FF9500" : "none"
+                                }}
+                            >
+                                ⏳ Da Riscuotere
+                            </button>
+                        </div>
+
                         <p style={{ marginTop: "1rem", marginBottom: "0.25rem", fontSize: "0.9rem", fontWeight: "600" }}>
                             Compenso Lordo Concordato (€)
                         </p>

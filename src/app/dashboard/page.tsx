@@ -44,6 +44,7 @@ export default function Dashboard() {
   const { isLoaded, isSignedIn, user } = useUser();
   const { session } = useSession();
   const [selectedCategory, setSelectedCategory] = useState<{ nome: string, totale: number, icona: string } | null>(null);
+  const [causeDaRiscuotere, setCauseDaRiscuotere] = useState<{ nome: string, compenso: number }[]>([]);
 
   // Global State (Zustand/Context come richiesto)
   const { regime: ctxRegime, expenses: ctxExpenses, removeExpense } = useExpenseContext();
@@ -99,9 +100,12 @@ export default function Dashboard() {
 
   // Dati Dinamici
   const [entrateMensili, setEntrateMensili] = useState(0);
+  const [entrateAnnuali, setEntrateAnnuali] = useState(0);
   const [usciteMensili, setUsciteMensili] = useState(0);
+  const [usciteAnnuali, setUsciteAnnuali] = useState(0);
   const [tasseMensiliAccantonate, setTasseMensiliAccantonate] = useState(0);
   const [cassaMaturataMensile, setCassaMaturataMensile] = useState(0);
+  const [cassaMaturataAnnuale, setCassaMaturataAnnuale] = useState(0);
   const [ritenuteMensili, setRitenuteMensili] = useState(0);
   const [categorieSpesa, setCategorieSpesa] = useState(categorieIniziali);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,13 +151,21 @@ export default function Dashboard() {
 
       let totEntrate = 0;
       let totTasseAccantonate = 0;
+      
+      // Traccia cause da riscuotere per il reminder
+      const pendenti: { nome: string, compenso: number }[] = [];
 
       if (cause) {
         cause.forEach(c => {
+          if (c.stato === "da_riscuotere") {
+            pendenti.push({ nome: c.nome_causa, compenso: Number(c.compenso_lordo || 0) });
+            return; // Non contare nei calcoli
+          }
           const importo = Number(c.compenso_lordo || 0);
           totEntrate += importo;
         });
       }
+      setCauseDaRiscuotere(pendenti);
 
       // 2. Carica le Uscite (Transazioni)
       const { data: uscite, error: errUscite } = await supabase
@@ -203,6 +215,7 @@ export default function Dashboard() {
 
       if (cause) {
         cause.forEach(c => {
+          if (c.stato === "da_riscuotere") return; // Escludi dai calcoli
           // Compenso + SpeseGenerali
           const compensoPuro = Number(c.compenso_base || c.compenso_lordo || 0);
           const speseGenerali = compensoPuro * 0.15;
@@ -355,6 +368,60 @@ export default function Dashboard() {
       setUsciteMensili(totUsciteLorde);
       setCategorieSpesa(nuoveCategorie);
 
+      // --- CALCOLO CASSA ANNUALE (YTD) ---
+      const startOfYear = `${today.getFullYear()}-01-01`;
+      const { data: ytdCause } = await supabase
+        .from('cause')
+        .select('compenso_base, compenso_lordo, cpa_4, stato')
+        .eq('user_id', user?.id)
+        .eq('stato', 'incassata')
+        .gte('data_sentenza', startOfYear);
+
+      let ytdLordoIncassato = 0;
+      let ytdCpaTotale = 0;
+
+      if (ytdCause) {
+        ytdCause.forEach(c => {
+          const compensoPuro = Number(c.compenso_base || c.compenso_lordo || 0);
+          const speseGenerali = compensoPuro * 0.15;
+          ytdLordoIncassato += (compensoPuro + speseGenerali);
+          ytdCpaTotale += Number(c.cpa_4 || 0);
+        });
+      }
+
+      let ytdCassaSoggettiva = 0;
+      if (ytdLordoIncassato > 0) {
+        const imponibileYtd = isRegimeOrdinario 
+          ? Math.max(0, ytdLordoIncassato - (limiteRistorantiInfo?.speso || 0)) // Nota: semplificato, servirebbe fetch totale uscite YTD
+          : ytdLordoIncassato * 0.78;
+        
+        if (imponibileYtd <= CASSA_TETTO) {
+          ytdCassaSoggettiva = imponibileYtd * CASSA_ALIQUOTA_BASE;
+        } else {
+          ytdCassaSoggettiva = (CASSA_TETTO * CASSA_ALIQUOTA_BASE) + ((imponibileYtd - CASSA_TETTO) * CASSA_ALIQUOTA_ECCEDENZA);
+        }
+      }
+
+      // La quota fissa (Target) è CPA + Soggettiva + Maternità (100€ annui)
+      const cassaAnnualeTotale = ytdCpaTotale + ytdCassaSoggettiva + 100;
+      setCassaMaturataAnnuale(cassaAnnualeTotale);
+
+      // --- CALCOLO USCITE ANNAULI PER OBIETTIVO ---
+      const { data: ytdUscite } = await supabase
+        .from('transazioni')
+        .select('importo')
+        .eq('user_id', user?.id)
+        .eq('tipo', 'uscita')
+        .gte('data_transazione', startOfYear);
+
+      let totUsciteAnnuali = 0;
+      if (ytdUscite) {
+        ytdUscite.forEach(u => totUsciteAnnuali += Number(u.importo));
+      }
+
+      setEntrateAnnuali(ytdLordoIncassato);
+      setUsciteAnnuali(totUsciteAnnuali);
+
     } catch (error) {
       console.error("Errore recupero dashboard:", error);
     }
@@ -415,11 +482,11 @@ export default function Dashboard() {
 
   const nettoPuroGrafico = Math.max(0.1, nettoPulito);
 
-  // Percentuale allarme su Uscite rispetto alle Entrate
-  const entrateVerificabili = entrateMensili > 0 ? entrateMensili : 1;
-  const uscitePercentuale = (usciteMensili / entrateVerificabili) * 100;
+  // Percentuale allarme su Uscite rispetto alle Entrate (BASATO SU ANNUALE)
+  const entrateAnnualiVerificabili = entrateAnnuali > 0 ? entrateAnnuali : 1;
+  const uscitePercentualeAnnuale = (usciteAnnuali / entrateAnnualiVerificabili) * 100;
 
-  const statusIcon = uscitePercentuale > sogliaFaccina
+  const statusIcon = uscitePercentualeAnnuale > sogliaFaccina
     ? <XCircle className="w-6 h-6 text-red-500" />
     : <CheckCircle2 className="w-6 h-6 text-green-500" />;
 
@@ -498,6 +565,30 @@ export default function Dashboard() {
             Mese Corrente
           </p>
         </div>
+
+        {/* Reminder Fatture da Riscuotere */}
+        {causeDaRiscuotere.length > 0 && (
+          <div style={{
+            background: "rgba(255,149,0,0.1)",
+            border: "1px solid rgba(255,149,0,0.3)",
+            borderRadius: "12px",
+            padding: "10px 14px",
+            marginBottom: "0rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px"
+          }}>
+            <span style={{ fontSize: "1.3rem" }}>⏳</span>
+            <div>
+              <span style={{ fontWeight: "600", color: "#FF9500", fontSize: "0.9rem" }}>
+                {causeDaRiscuotere.length} fattur{causeDaRiscuotere.length === 1 ? "a" : "e"} da riscuotere
+              </span>
+              <div style={{ fontSize: "0.75rem", opacity: 0.7, marginTop: "2px" }}>
+                {causeDaRiscuotere.map(c => c.nome).join(", ")}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Torta Annuale (Piccola in alto a dx) */}
         <div 
@@ -607,16 +698,16 @@ export default function Dashboard() {
       )}
 
       {/* ALERT CASSA FORENSE MINIMALE */}
-      {cassaMaturataMensile > 0 && cassaMaturataMensile < 3600 && (
+      {cassaMaturataAnnuale > 0 && cassaMaturataAnnuale < 3600 && (
         <div className="ios-card" style={{ marginTop: "1rem", backgroundColor: "rgba(255, 149, 0, 0.1)", border: "1px solid #ff9f0a", animation: "fadeIn 0.5s" }}>
           <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
             <div style={{ fontSize: "2rem" }}>⚠️</div>
             <div>
               <h4 style={{ margin: "0 0 4px 0", color: "#cc7e00" }}>
-                Target Cassa Forense
+                Target Cassa Forense (Annuale)
               </h4>
               <p style={{ fontSize: "0.85rem", margin: 0, opacity: 0.9 }}>
-                Hai maturato <strong>€{cassaMaturataMensile.toFixed(2)}</strong> di contributi. La Cassa richiede un versamento minimo annuo di 3.600€. Mancano <strong>€{(3600 - cassaMaturataMensile).toFixed(2)}</strong> per coprire la quota fissa.
+                Hai maturato <strong>€{cassaMaturataAnnuale.toFixed(2)}</strong> di contributi quest&apos;anno. La Cassa richiede un versamento minimo annuo di 3.600€. Mancano <strong>€{Math.max(0, 3600 - cassaMaturataAnnuale).toFixed(2)}</strong> per coprire la quota fissa.
               </p>
             </div>
           </div>

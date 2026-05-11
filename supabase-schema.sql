@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS public.cause (
   nome_causa TEXT NOT NULL,
   data_sentenza DATE,
   compenso_lordo NUMERIC(10, 2) DEFAULT 0,
-  stato TEXT DEFAULT 'aperta', -- 'aperta', 'vinta', 'persa', 'incassata'
+  stato TEXT DEFAULT 'aperta', -- 'aperta', 'vinta', 'persa', 'incassata', 'da_riscuotere'
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
