@@ -51,7 +51,7 @@ export default function MainMenu({ isCollapsed = false, setIsCollapsed }: MainMe
                             transition: "all 0.3s ease",
                             boxShadow: isActive('/scanner') ? "0 0 20px rgba(255, 204, 0, 0.6)" : "none"
                         }}>
-                        📸
+                        💵
                     </span>
                     <span className="nav-text" style={{
                         marginTop: "15px",
