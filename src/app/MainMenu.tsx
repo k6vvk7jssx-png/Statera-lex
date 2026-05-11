@@ -137,7 +137,7 @@ export default function MainMenu({ isCollapsed = false, setIsCollapsed }: MainMe
                 <div className={`flex-1 py-6 flex flex-col gap-2 overflow-y-auto ${isCollapsed ? 'px-2 items-center' : 'px-3'}`}>
                     {[
                         { href: "/dashboard", icon: "📊", label: "Dashboard" },
-                        { href: "/scanner", icon: "📸", label: "Aggiungi Spesa" },
+                        { href: "/scanner", icon: "💵", label: "Spese" },
                         { href: "/tasse", icon: "🧮", label: "Cassetto Fiscale" },
                         { href: "/cause", icon: "⚖️", label: "Fatture / Cause" },
                         { href: "/impostazioni", icon: "⚙️", label: "Impostazioni" }
